@@ -24,7 +24,7 @@ Currently, the tile maps being rendered are fairly simple, they are loaded as si
 Using bevy_tmx is supposed to be really simple, just add the `TmxPlugin` to your `App` and load a scene. 
 If you need to add custom functionality to the entities loaded from the `.tmx` file, you can customize the `TmxLoader` to do so during load time.
 
-###Example
+### Example
 ```rust
 use bevy::prelude::*;
 use bevy::window::WindowMode;
