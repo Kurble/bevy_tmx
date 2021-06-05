@@ -3,6 +3,13 @@ name = "bevy_tmx"
 version = "0.1.0"
 authors = ["Bram Buurlage"]
 edition = "2018"
+readme = "readme.md"
+description = "Scene loader for .tmx files created by the Tiled map editor"
+license = "MIT"
+repository = "https://github.com/Kurble/bevy_tmx"
+documentation = "https://docs.rs/bevy_tmx"
+keywords = ["bevy", "tiled", "tmx", "scene", "asset"]
+categories = ["game-development"]
 
 [dependencies]
 bevy = "0.5"
