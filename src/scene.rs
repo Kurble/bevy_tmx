@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use anyhow::*;
 use bevy::asset::{LoadContext, LoadedAsset};
@@ -9,11 +9,12 @@ use bevy::reflect::TypeUuid;
 use bevy::render::mesh::Indices;
 use bevy::render::pipeline::{PrimitiveTopology, RenderPipeline};
 use bevy::render::render_graph::base::MainPass;
-use bevy::render::texture::{Extent3d, TextureDimension, TextureFormat};
 use bevy::sprite::{QUAD_HANDLE, SPRITE_PIPELINE_HANDLE};
 
 use crate::parallax::Parallax;
 use crate::tmx::{Layer, Map, Object, Texture as TmxTexture, TexturePtr, Tile};
+use std::collections::hash_map::Entry;
+use std::iter::FromIterator;
 
 pub type ObjectVisitor = dyn for<'w> Fn(&Object, &mut EntityMut<'w>) + Send + Sync;
 pub type ImageVisitor = dyn for<'w> Fn(&mut EntityMut<'w>) + Send + Sync;
@@ -77,11 +78,10 @@ impl<'a, 'b> SceneBuilder<'a, 'b> {
         }
     }
 
-    pub fn build(mut self) -> Result<Scene> {
+    pub async fn build(mut self) -> Result<Scene> {
         let map = self.map;
-        for (i, layer) in map.layers.iter().enumerate() {
-            self.spawn_layer_entities(&layer)
-                .with_context(|| format!("layer #{} of tmx asset: \n", i))?;
+        for layer in map.layers.iter() {
+            self.spawn_layer_entities(&layer).await?;
         }
         if let Some(visit_map) = self.visit_map {
             (*visit_map)(&self.map, &mut self.world);
@@ -89,93 +89,176 @@ impl<'a, 'b> SceneBuilder<'a, 'b> {
         Ok(Scene::new(self.world))
     }
 
-    fn spawn_layer_entities(&mut self, layer: &Layer) -> Result<()> {
-        match layer {
-            Layer::TileLayer {
-                position,
-                size,
-                color,
-                visible: _,
-                offset,
-                parallax,
-                data,
-            } => {
-                let mut images_to_meshes =
-                    HashMap::<TexturePtr, (Handle<ColorMaterial>, Vec<_>)>::new();
+    async fn spawn_layer_entities(&mut self, layer: &Layer) -> Result<()> {
+        let mut queue = VecDeque::from_iter(Some(layer));
+        while let Some(layer) = queue.pop_front() {
+            match layer {
+                Layer::TileLayer {
+                    position,
+                    size,
+                    color,
+                    visible: _,
+                    offset,
+                    parallax,
+                    data,
+                } => {
+                    let mut images_to_meshes =
+                        HashMap::<TexturePtr, (Handle<ColorMaterial>, Vec<_>)>::new();
 
-                for (i, &gid) in data.iter().enumerate() {
-                    if let Some(&Tile {
-                        image: Some(ref image),
-                        top_left,
-                        bottom_right,
-                        width: tile_width,
-                        height: tile_height,
-                        ..
-                    }) = self.map.get_tile(gid)
-                    {
-                        let (x, y) = self.map.tile_type.coord_to_pos(
-                            size.y as i32,
-                            (i as i32 % size.x as i32) + position.x,
-                            (i as i32 / size.x as i32) + position.y,
+                    for (i, &gid) in data.iter().enumerate() {
+                        if let Some(&Tile {
+                            image: Some(ref image),
+                            top_left,
+                            bottom_right,
+                            width: tile_width,
+                            height: tile_height,
+                            ..
+                        }) = self.map.get_tile(gid)
+                        {
+                            let (x, y) = self.map.tile_type.coord_to_pos(
+                                size.y as i32,
+                                (i as i32 % size.x as i32) + position.x,
+                                (i as i32 / size.x as i32) + position.y,
+                            );
+                            let tile = (x, y, tile_width, tile_height, top_left, bottom_right);
+                            match images_to_meshes.entry(TexturePtr::from(image)) {
+                                Entry::Occupied(mut value) => value.get_mut().1.push(tile),
+                                vacant => {
+                                    let texture = self.texture_handle(image).await?;
+                                    let material = self.texture_material_handle(texture, color);
+                                    vacant.or_insert((material, Vec::new())).1.push(tile);
+                                }
+                            };
+                        }
+                    }
+
+                    for (_, (material, tiles)) in images_to_meshes.into_iter() {
+                        let mut vertices = Vec::with_capacity(tiles.len() * 4);
+                        let mut normals = Vec::with_capacity(tiles.len() * 4);
+                        let mut uvs = Vec::with_capacity(tiles.len() * 4);
+                        let mut indices = Vec::with_capacity(tiles.len() * 6);
+
+                        for (x, y, w, h, top_left, bottom_right) in tiles {
+                            let i = vertices.len() as u16;
+                            indices.extend_from_slice(&[i, i + 1, i + 2, i + 2, i + 1, i + 3]);
+
+                            vertices.push([x as f32, y as f32, 0.0]);
+                            vertices.push([(x + w) as f32, y as f32, 0.0]);
+                            vertices.push([x as f32, (y + h) as f32, 0.0]);
+                            vertices.push([(x + w) as f32, (y + h) as f32, 0.0]);
+
+                            normals.push([0.0, 0.0, 1.0]);
+                            normals.push([0.0, 0.0, 1.0]);
+                            normals.push([0.0, 0.0, 1.0]);
+                            normals.push([0.0, 0.0, 1.0]);
+
+                            uvs.push([top_left.x, top_left.y]);
+                            uvs.push([bottom_right.x, top_left.y]);
+                            uvs.push([top_left.x, bottom_right.y]);
+                            uvs.push([bottom_right.x, bottom_right.y]);
+                        }
+
+                        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+                        mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
+                        mesh.set_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+                        mesh.set_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+                        mesh.set_indices(Some(Indices::U16(indices)));
+                        self.label_counter += 1;
+                        let mesh = self.context.set_labeled_asset(
+                            format!("mesh#{}", self.label_counter).as_str(),
+                            LoadedAsset::new(mesh),
                         );
-                        images_to_meshes
-                            .entry(TexturePtr::from(image))
-                            .or_insert_with(|| {
-                                let texture = self.texture_handle(image);
-                                let material = self.texture_material_handle(texture, color);
-                                (material, Vec::new())
-                            })
-                            .1
-                            .push((x, y, tile_width, tile_height, top_left, bottom_right));
+
+                        let mut entity = self.world.spawn();
+                        let transform = Transform::from_xyz(
+                            offset.x as f32 * self.scale.x,
+                            offset.y as f32 * self.scale.y,
+                            self.offset_z,
+                        );
+                        entity.insert_bundle(ProtoSpriteBundle {
+                            sprite: ProtoSprite(self.scale.xy()),
+                            mesh,
+                            material,
+                            transform,
+                            ..ProtoSpriteBundle::default()
+                        });
+                        if parallax != &Vec2::new(1.0, 1.0) {
+                            entity.insert(Parallax::new(*parallax, transform));
+                        }
                     }
                 }
 
-                for (_, (material, tiles)) in images_to_meshes.into_iter() {
-                    let mut vertices = Vec::with_capacity(tiles.len() * 4);
-                    let mut normals = Vec::with_capacity(tiles.len() * 4);
-                    let mut uvs = Vec::with_capacity(tiles.len() * 4);
-                    let mut indices = Vec::with_capacity(tiles.len() * 6);
+                Layer::ObjectLayer {
+                    objects,
+                    offset,
+                    parallax,
+                    visible,
+                    color,
+                    ..
+                } => {
+                    for (i, object) in objects.iter().enumerate() {
+                        let object_sprite = if let Some(gid) = object.tile {
+                            self.object_sprite(gid, color).await?
+                        } else {
+                            None
+                        };
 
-                    for (x, y, w, h, top_left, bottom_right) in tiles {
-                        let i = vertices.len() as u16;
-                        indices.extend_from_slice(&[i, i + 1, i + 2, i + 2, i + 1, i + 3]);
+                        let mut entity = self.world.spawn();
 
-                        vertices.push([x as f32, y as f32, 0.0]);
-                        vertices.push([(x + w) as f32, y as f32, 0.0]);
-                        vertices.push([x as f32, (y + h) as f32, 0.0]);
-                        vertices.push([(x + w) as f32, (y + h) as f32, 0.0]);
+                        let mut transform = Transform::from_xyz(
+                            (offset.x as f32 + object.x) * self.scale.x,
+                            (offset.y as f32 + object.y) * self.scale.y,
+                            self.offset_z as f32 + (i as f32 / objects.len() as f32) * self.scale.z,
+                        );
+                        transform.rotation = Quat::from_rotation_z(-object.rotation.to_radians());
 
-                        normals.push([0.0, 0.0, 1.0]);
-                        normals.push([0.0, 0.0, 1.0]);
-                        normals.push([0.0, 0.0, 1.0]);
-                        normals.push([0.0, 0.0, 1.0]);
+                        if let Some(object_sprite) = object_sprite {
+                            entity.insert_bundle(ProtoSpriteBundle {
+                                sprite: ProtoSprite(
+                                    Vec2::new(object.width, object.height) * self.scale.xy(),
+                                ),
+                                transform,
+                                visible: Visible {
+                                    is_transparent: true,
+                                    is_visible: *visible && object.visible,
+                                },
+                                ..object_sprite
+                            });
+                        } else {
+                            entity.insert_bundle((transform, GlobalTransform::default()));
+                        }
 
-                        uvs.push([top_left.x, top_left.y]);
-                        uvs.push([bottom_right.x, top_left.y]);
-                        uvs.push([top_left.x, bottom_right.y]);
-                        uvs.push([bottom_right.x, bottom_right.y]);
+                        if parallax != &Vec2::new(1.0, 1.0) {
+                            entity.insert(Parallax::new(*parallax, transform));
+                        }
+
+                        if let Some(handler) = self.visit_object.as_ref() {
+                            (*handler)(object, &mut entity);
+                        }
                     }
+                }
 
-                    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
-                    mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
-                    mesh.set_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-                    mesh.set_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-                    mesh.set_indices(Some(Indices::U16(indices)));
-                    self.label_counter += 1;
-                    let mesh = self.context.set_labeled_asset(
-                        format!("mesh#{}", self.label_counter).as_str(),
-                        LoadedAsset::new(mesh),
-                    );
-
-                    let mut entity = self.world.spawn();
+                Layer::ImageLayer {
+                    color,
+                    visible: _,
+                    offset,
+                    parallax,
+                    image,
+                } => {
+                    let texture = self.texture_handle(image).await?;
+                    let material = self.texture_material_handle(texture, color);
                     let transform = Transform::from_xyz(
                         offset.x as f32 * self.scale.x,
                         offset.y as f32 * self.scale.y,
                         self.offset_z,
                     );
+
+                    let mut entity = self.world.spawn();
                     entity.insert_bundle(ProtoSpriteBundle {
-                        sprite: ProtoSprite(self.scale.xy()),
-                        mesh,
+                        sprite: ProtoSprite(
+                            Vec2::new(image.width() as f32, image.height() as f32)
+                                * self.scale.xy(),
+                        ),
                         material,
                         transform,
                         ..ProtoSpriteBundle::default()
@@ -183,124 +266,30 @@ impl<'a, 'b> SceneBuilder<'a, 'b> {
                     if parallax != &Vec2::new(1.0, 1.0) {
                         entity.insert(Parallax::new(*parallax, transform));
                     }
+                    if let Some(handler) = self.visit_image.as_ref() {
+                        (*handler)(&mut entity);
+                    }
                 }
-            }
 
-            Layer::ObjectLayer {
-                objects,
-                offset,
-                parallax,
-                visible,
-                color,
-                ..
-            } => {
-                for (i, object) in objects.iter().enumerate() {
-                    let object_sprite = object.tile.and_then(|gid| self.object_sprite(gid, color));
-
-                    let mut entity = self.world.spawn();
-
-                    let mut transform = Transform::from_xyz(
-                        (offset.x as f32 + object.x) * self.scale.x,
-                        (offset.y as f32 + object.y) * self.scale.y,
-                        self.offset_z as f32 + (i as f32 / objects.len() as f32) * self.scale.z,
-                    );
-                    transform.rotation = Quat::from_rotation_z(-object.rotation.to_radians());
-
-                    if let Some(object_sprite) = object_sprite {
-                        entity.insert_bundle(ProtoSpriteBundle {
-                            sprite: ProtoSprite(
-                                Vec2::new(object.width, object.height) * self.scale.xy(),
-                            ),
-                            transform,
-                            visible: Visible {
-                                is_transparent: true,
-                                is_visible: *visible && object.visible,
-                            },
-                            ..object_sprite
-                        });
-                    } else {
-                        entity.insert_bundle((transform, GlobalTransform::default()));
-                    }
-
-                    if parallax != &Vec2::new(1.0, 1.0) {
-                        entity.insert(Parallax::new(*parallax, transform));
-                    }
-
-                    if let Some(handler) = self.visit_object.as_ref() {
-                        (*handler)(object, &mut entity);
+                Layer::Group { layers } => {
+                    for layer in layers.iter().rev() {
+                        queue.push_front(layer);
                     }
                 }
             }
 
-            Layer::ImageLayer {
-                color,
-                visible: _,
-                offset,
-                parallax,
-                image,
-            } => {
-                let texture = self.texture_handle(image);
-                let material = self.texture_material_handle(texture, color);
-                let transform = Transform::from_xyz(
-                    offset.x as f32 * self.scale.x,
-                    offset.y as f32 * self.scale.y,
-                    self.offset_z,
-                );
-
-                let mut entity = self.world.spawn();
-                entity.insert_bundle(ProtoSpriteBundle {
-                    sprite: ProtoSprite(
-                        Vec2::new(image.width() as f32, image.height() as f32) * self.scale.xy(),
-                    ),
-                    material,
-                    transform,
-                    ..ProtoSpriteBundle::default()
-                });
-                if parallax != &Vec2::new(1.0, 1.0) {
-                    entity.insert(Parallax::new(*parallax, transform));
-                }
-                if let Some(handler) = self.visit_image.as_ref() {
-                    (*handler)(&mut entity);
-                }
-            }
-
-            Layer::Group { layers } => {
-                for (i, layer) in layers.iter().enumerate() {
-                    self.spawn_layer_entities(layer)
-                        .with_context(|| format!("in layer #{} of group: \n", i))?;
-                }
-            }
+            self.offset_z += self.scale.z;
         }
-
-        self.offset_z += self.scale.z;
 
         Ok(())
     }
 
-    fn texture_handle(&mut self, image: &TmxTexture) -> Handle<Texture> {
-        let width = image.width();
-        let height = image.height();
-
-        let texture_handles = &mut self.texture_handles;
-        let label_counter = &mut self.label_counter;
-        let context = &mut *self.context;
-
-        texture_handles
-            .entry(TexturePtr::from(image))
-            .or_insert_with(|| {
-                let texture = Texture::new(
-                    Extent3d::new(width, height, 1),
-                    TextureDimension::D2,
-                    image.to_vec(),
-                    TextureFormat::Rgba8Unorm,
-                );
-                *label_counter += 1;
-                context.set_labeled_asset(
-                    format!("{}#{}", image.label(), *label_counter).as_str(),
-                    LoadedAsset::new(texture),
-                )
-            })
-            .clone()
+    async fn texture_handle(&mut self, image: &TmxTexture) -> Result<Handle<Texture>> {
+        let handle: Handle<Texture> = match self.texture_handles.entry(TexturePtr::from(image)) {
+            Entry::Occupied(value) => value.get().clone(),
+            vacant => vacant.or_insert(image.load(self.context).await?).clone(),
+        };
+        Ok(handle)
     }
 
     fn texture_material_handle(
@@ -334,14 +323,22 @@ impl<'a, 'b> SceneBuilder<'a, 'b> {
             .clone()
     }
 
-    fn object_sprite(&mut self, gid: u32, color: &Vec4) -> Option<ProtoSpriteBundle> {
+    async fn object_sprite(&mut self, gid: u32, color: &Vec4) -> Result<Option<ProtoSpriteBundle>> {
         if self.object_sprites.contains_key(&gid) {
-            self.object_sprites.get(&gid).cloned()
+            Ok(self.object_sprites.get(&gid).cloned())
         } else {
-            let tile = self.map.get_tile(gid)?;
-            let image = tile.image.as_ref()?;
+            let tile = if let Some(tile) = self.map.get_tile(gid) {
+                tile
+            } else {
+                return Ok(None);
+            };
+            let image = if let Some(image) = tile.image.as_ref() {
+                image
+            } else {
+                return Ok(None);
+            };
 
-            let texture = self.texture_handle(image);
+            let texture = self.texture_handle(image).await?;
             let material = self.texture_material_handle(texture, color);
             let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
             mesh.set_attribute(
@@ -370,7 +367,7 @@ impl<'a, 'b> SceneBuilder<'a, 'b> {
                 LoadedAsset::new(mesh),
             );
 
-            Some(
+            Ok(Some(
                 self.object_sprites
                     .entry(gid)
                     .or_insert(ProtoSpriteBundle {
@@ -380,7 +377,7 @@ impl<'a, 'b> SceneBuilder<'a, 'b> {
                         ..ProtoSpriteBundle::default()
                     })
                     .clone(),
-            )
+            ))
         }
     }
 }

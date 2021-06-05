@@ -1,9 +1,11 @@
+use std::hash::{Hash, Hasher};
 use std::io::{BufReader, Read};
 use std::path::Path;
 use std::pin::Pin;
 
 use anyhow::*;
 use bevy::math::{IVec2, UVec2, Vec4};
+use bevy::utils::AHasher;
 use xml::attribute::OwnedAttribute;
 use xml::reader::{EventReader, XmlEvent};
 
@@ -243,7 +245,7 @@ impl Tileset {
                 "source" => {
                     found_source = true;
                     let source_path = Path::new(a.value.as_str());
-                    let file_name = env.unique_name(source_path);
+                    let file_name = env.file_path(source_path);
                     let sub_env = env.file_directory(source_path);
                     let file = env.load_file(source_path).await?;
                     let file = BufReader::new(file.as_slice());
@@ -257,7 +259,7 @@ impl Tileset {
                                 result =
                                     Tileset::parse_tsx(result, sub_env, attributes, &mut reader)
                                         .await?;
-                                result.source = file_name;
+                                result.source = format!("{}", file_name.display());
                                 break;
                             } else {
                                 parse_empty(&mut reader)?;
@@ -900,7 +902,10 @@ impl Object {
                             match a.name.local_name.as_ref() {
                                 "firstgid" => first_gid = a.value.parse()?,
                                 "source" => {
-                                    source = env.unique_name(Path::new(a.value.as_str()));
+                                    source = format!(
+                                        "{}",
+                                        env.file_path(Path::new(a.value.as_str())).display()
+                                    );
                                 }
                                 _ => (),
                             }
@@ -975,17 +980,18 @@ async fn parse_image<R: Read + Send>(
         continue;
     }
 
-    let label = source.as_deref().unwrap_or("embedded#");
     let mut image = if let Some(source) = source.as_ref() {
-        Texture::from_bytes(&env.load_file(Path::new(source)).await?, label)?
+        Texture::from_path(env.file_path(Path::new(source)))
     } else if let Some(data) = data {
-        Texture::from_bytes(data.as_slice(), label)?
+        let mut h = AHasher::default();
+        data.hash(&mut h);
+        Texture::from_bytes(data.as_slice(), format!("embedded#{}", h.finish()))?
     } else {
         bail!("invalid image")
     };
 
     if let (Some(width), Some(height)) = (width, height) {
-        image = image.subimage(0, 0, width, height)?;
+        image = image.resize(width, height).await?;
     }
     Ok(image)
 }

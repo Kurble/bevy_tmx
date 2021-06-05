@@ -1,10 +1,29 @@
-#![deny(missing_docs)]
-//#![doc(include = "../readme.md")]
-//! See readme.md
+//! # bevy_tmx
+//! bevy_tmx is a plugin for the bevy game engine that allows you to read .tmx files from the [tiled map editor](https://www.mapeditor.org/) as scenes.
+//! The plugin can be configured so that you can add more of your own components to the entities of the scene.
+//!
+//! Currently, the tile maps being rendered are fairly simple, they are loaded as simple sprite entities, one per layer and sprite sheet.
+//!
+//! # Features
+//! - All tile layout modes supported by tiled:
+//!     - Orthogonal
+//!     - Isometric staggered and non-staggered
+//!     - Hexagonal staggered
+//! - Object layers with support for custom object processing
+//! - Image layers with support for custom image layer processing
+//! - Parallax rendering
+//!  
+//! # Todo
+//! - Infinite map support
+//! - All render orders other than `RightDown`
+//!
+//! # Overview
+//! Using bevy_tmx is supposed to be really simple, just add the `TmxPlugin` to your `App` and load a scene.
+//! If you need to add custom functionality to the entities loaded from the `.tmx` file, you can customize the `TmxLoader` to do so during load time.
 
-use std::future::Future;
+#![deny(missing_docs)]
+
 use std::path::{Component, Path, PathBuf};
-use std::pin::Pin;
 use std::sync::Arc;
 
 use anyhow::*;
@@ -132,7 +151,7 @@ impl AssetLoader for TmxSceneLoader {
                 self.map_visitor.as_deref(),
                 self.scale,
             );
-            let scene = builder.build()?;
+            let scene = builder.build().await?;
 
             load_context.set_default_asset(LoadedAsset::new(scene));
             Ok(())
@@ -156,26 +175,11 @@ impl Default for TmxPlugin {
 }
 
 impl<'a> TmxLoadContext<'a> {
-    fn load_file<'p>(
-        &'p self,
-        path: impl AsRef<Path> + Send + 'p,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>>> + Send + 'p>> {
-        let mut joined = PathBuf::new();
-        for c in self.relative.join(path.as_ref()).components() {
-            match c {
-                Component::Prefix(prefix) => joined.push(prefix.as_os_str()),
-                Component::RootDir => joined.push("/"),
-                Component::CurDir => (),
-                Component::ParentDir => {
-                    joined.pop();
-                }
-                Component::Normal(c) => joined.push(c),
-            }
-        }
-        Box::pin(async move { Ok(self.context.read_asset_bytes(joined).await?) })
+    async fn load_file<'p>(&'p self, path: impl AsRef<Path> + Send + 'p) -> Result<Vec<u8>> {
+        Ok(self.context.read_asset_bytes(self.file_path(path)).await?)
     }
 
-    fn unique_name(&self, path: impl AsRef<Path>) -> String {
+    fn file_path(&self, path: impl AsRef<Path>) -> PathBuf {
         let mut joined = PathBuf::new();
         for c in self.relative.join(path.as_ref()).components() {
             match c {
@@ -188,7 +192,7 @@ impl<'a> TmxLoadContext<'a> {
                 Component::Normal(c) => joined.push(c),
             }
         }
-        format!("{}", joined.display())
+        joined
     }
 
     fn file_directory(&self, path: impl AsRef<Path>) -> Self {
