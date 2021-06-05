@@ -1,4 +1,6 @@
+use std::collections::hash_map::Entry;
 use std::collections::{HashMap, VecDeque};
+use std::iter::FromIterator;
 
 use anyhow::*;
 use bevy::asset::{LoadContext, LoadedAsset};
@@ -13,8 +15,6 @@ use bevy::sprite::{QUAD_HANDLE, SPRITE_PIPELINE_HANDLE};
 
 use crate::parallax::Parallax;
 use crate::tmx::{Layer, Map, Object, Texture as TmxTexture, TexturePtr, Tile};
-use std::collections::hash_map::Entry;
-use std::iter::FromIterator;
 
 pub type ObjectVisitor = dyn for<'w> Fn(&Object, &mut EntityMut<'w>) + Send + Sync;
 pub type ImageVisitor = dyn for<'w> Fn(&mut EntityMut<'w>) + Send + Sync;

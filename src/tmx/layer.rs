@@ -1,5 +1,6 @@
-use super::*;
 use bevy::math::{IVec2, UVec2, Vec4};
+
+use super::*;
 
 /// A layer
 pub enum Layer {

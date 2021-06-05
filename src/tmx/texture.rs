@@ -1,4 +1,5 @@
 use std::hash::Hasher;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::*;
@@ -6,7 +7,6 @@ use async_mutex::Mutex;
 use bevy::asset::{Handle, LoadContext, LoadedAsset};
 use bevy::render::texture::{Extent3d, Texture as BevyTexture, TextureDimension, TextureFormat};
 use image::{load_from_memory, GenericImage, RgbaImage};
-use std::path::PathBuf;
 
 /// A shared image
 #[derive(Clone)]
