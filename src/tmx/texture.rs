@@ -44,7 +44,7 @@ impl Texture {
             data: Arc::new(Mutex::new(Inner::Defined { path })),
             label,
             width: 0,
-            height: 1,
+            height: 0,
         }
     }
 

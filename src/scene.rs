@@ -79,19 +79,8 @@ impl<'a, 'b> SceneBuilder<'a, 'b> {
     }
 
     pub async fn build(mut self) -> Result<Scene> {
-        let map = self.map;
-        for layer in map.layers.iter() {
-            self.spawn_layer_entities(&layer).await?;
-        }
-        if let Some(visit_map) = self.visit_map {
-            (*visit_map)(&self.map, &mut self.world);
-        }
-        Ok(Scene::new(self.world))
-    }
-
-    async fn spawn_layer_entities(&mut self, layer: &Layer) -> Result<()> {
-        let mut queue = VecDeque::from_iter(Some(layer));
-        while let Some(layer) = queue.pop_front() {
+        let mut layer_queue = VecDeque::from_iter(self.map.layers.iter());
+        while let Some(layer) = layer_queue.pop_front() {
             match layer {
                 Layer::TileLayer {
                     position,
@@ -273,7 +262,7 @@ impl<'a, 'b> SceneBuilder<'a, 'b> {
 
                 Layer::Group { layers } => {
                     for layer in layers.iter().rev() {
-                        queue.push_front(layer);
+                        layer_queue.push_front(layer);
                     }
                 }
             }
@@ -281,7 +270,11 @@ impl<'a, 'b> SceneBuilder<'a, 'b> {
             self.offset_z += self.scale.z;
         }
 
-        Ok(())
+        if let Some(visit_map) = self.visit_map {
+            (*visit_map)(&self.map, &mut self.world);
+        }
+
+        Ok(Scene::new(self.world))
     }
 
     async fn texture_handle(&mut self, image: &TmxTexture) -> Result<Handle<Texture>> {

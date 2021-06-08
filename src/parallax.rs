@@ -33,6 +33,8 @@ pub fn parallax_transform_system(
             transform.translation = parallax.transform.translation
                 + translation * vec3(1.0, 1.0, 0.0)
                 - translation * parallax.factor.extend(0.0);
+            transform.rotation = parallax.transform.rotation;
+            transform.scale = parallax.transform.scale;
         }
     }
 }

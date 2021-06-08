@@ -45,7 +45,11 @@ pub enum TileType {
 }
 
 impl TileType {
-    /// Convert tile coordinates to it's top left coordinates in pixels.
+    /// Convert tile coordinates to it's top left coordinates in pixels. Returns (x, y) in pixels.
+    ///
+    /// * `layer_height` - The height in tiles of the layer that the coordinates belong to. Ignored for non isometric layouts.
+    /// * `x` - The horizontal component of the coordinate
+    /// * `y` - The vertical component of the coordinate
     pub fn coord_to_pos(&self, layer_height: i32, x: i32, y: i32) -> (i32, i32) {
         match *self {
             TileType::Ortho { width, height, .. } => (x * width as i32, y * height as i32),
@@ -112,7 +116,11 @@ impl TileType {
         }
     }
 
-    /// Convert coordinates in pixels to tile coordinates.
+    /// Convert coordinates in pixels to tile coordinates. Returns (x, y) in tile coordinates.
+    ///
+    /// * `layer_height` - The height in tiles of the layer that the coordinates belong to. Ignored for non isometric layouts.
+    /// * `x` - The horizontal pixel coordinate
+    /// * `y` - The vertical pixel coordinate
     pub fn pos_to_coord(&self, layer_height: i32, x: i32, y: i32) -> (i32, i32) {
         match *self {
             TileType::Ortho { width, height, .. } => (x / width as i32, y / height as i32),
