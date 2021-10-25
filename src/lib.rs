@@ -154,6 +154,7 @@ impl AssetLoader for TmxSceneLoader {
             );
             let scene = builder.build().await?;
 
+            load_context.set_labeled_asset("map", LoadedAsset::new(map));
             load_context.set_default_asset(LoadedAsset::new(scene));
             Ok(())
         })

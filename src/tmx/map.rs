@@ -1,6 +1,10 @@
 use super::*;
 
+use bevy_reflect::TypeUuid;
+
 /// A tiled map loaded from a .tmx file.
+#[derive(TypeUuid)]
+#[uuid = "387665bd-394f-4c83-8869-dbf135aaa6a4"]
 pub struct Map {
     /// Custom properties.
     pub properties: HashMap<String, Property>,
