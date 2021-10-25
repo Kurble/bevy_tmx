@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::sync::Arc;
 
-use bevy::math::Vec2;
+use bevy_math::Vec2;
 
 pub use layer::Layer;
 pub use map::Map;
@@ -58,8 +58,8 @@ pub struct Tile {
     pub animation: Vec<Frame>,
     /// Custom properties defined on this tile.
     pub properties: HashMap<String, Property>,
-    /// Custom shapes defined on this tile.
-    pub shapes: Vec<Shape>,
+    /// ObjectGroup attached to this tile
+    pub object_group: Vec<Object>,
 }
 
 /// Animation frame within a tile

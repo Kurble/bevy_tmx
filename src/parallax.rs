@@ -1,8 +1,8 @@
-use bevy::ecs::reflect::ReflectComponent;
-use bevy::math::{vec3, Vec2};
-use bevy::prelude::{GlobalTransform, Query, Transform};
-use bevy::reflect::{Reflect, TypeUuid};
-use bevy::render::camera::Camera;
+use bevy_ecs::{reflect::ReflectComponent, system::Query};
+use bevy_math::{vec3, Vec2};
+use bevy_transform::components::{GlobalTransform, Transform};
+use bevy_reflect::{Reflect, TypeUuid};
+use bevy_render::camera::Camera;
 
 /// Component for sprites that should render according to a parallax relative to the camera.
 /// Note that the parallax_transform_system will overwrite the `Transform` component,

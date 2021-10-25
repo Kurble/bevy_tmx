@@ -27,9 +27,10 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::*;
-use bevy::asset::{AssetLoader, BoxedFuture, LoadContext, LoadedAsset};
-use bevy::ecs::world::EntityMut;
-use bevy::prelude::*;
+use bevy_app::{Plugin, AppBuilder};
+use bevy_asset::{AssetLoader, AddAsset, BoxedFuture, LoadContext, LoadedAsset};
+use bevy_ecs::{world::{EntityMut, World}, system::IntoSystem};
+use bevy_math::*;
 
 use tmx::{Map, Object};
 

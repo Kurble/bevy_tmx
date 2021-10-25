@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use anyhow::*;
 use async_mutex::Mutex;
-use bevy::asset::{Handle, LoadContext, LoadedAsset};
-use bevy::render::texture::{Extent3d, Texture as BevyTexture, TextureDimension, TextureFormat};
+use bevy_asset::{Handle, LoadContext, LoadedAsset};
+use bevy_render::texture::{Extent3d, Texture as BevyTexture, TextureDimension, TextureFormat};
 use image::{load_from_memory, GenericImage, RgbaImage};
 
 /// A shared image
@@ -20,6 +20,7 @@ pub struct Texture {
 enum Inner {
     Defined { path: PathBuf },
     Decoded { buffer: RgbaImage },
+    #[cfg(feature="plugin")]
     Loaded { handle: Handle<BevyTexture> },
 }
 
@@ -68,6 +69,7 @@ impl Texture {
                         height,
                     })
                 }
+                #[cfg(feature = "plugin")]
                 Inner::Loaded { .. } => unreachable!(),
             }
         } else {
@@ -75,6 +77,7 @@ impl Texture {
         }
     }
 
+    #[cfg(feature = "plugin")]
     pub(crate) async fn load(
         &self,
         load_context: &mut LoadContext<'_>,

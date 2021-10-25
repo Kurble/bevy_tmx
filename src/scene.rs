@@ -3,15 +3,27 @@ use std::collections::{HashMap, VecDeque};
 use std::iter::FromIterator;
 
 use anyhow::*;
-use bevy::asset::{LoadContext, LoadedAsset};
-use bevy::ecs::world::EntityMut;
-use bevy::math::Vec3Swizzles;
-use bevy::prelude::*;
-use bevy::reflect::TypeUuid;
-use bevy::render::mesh::Indices;
-use bevy::render::pipeline::{PrimitiveTopology, RenderPipeline};
-use bevy::render::render_graph::base::MainPass;
-use bevy::sprite::{QUAD_HANDLE, SPRITE_PIPELINE_HANDLE};
+use bevy_asset::{Handle, LoadContext, LoadedAsset};
+use bevy_ecs::{
+    bundle::Bundle,
+    reflect::ReflectComponent,
+    system::{Commands, Query},
+    world::{EntityMut, World},
+    entity::Entity,
+};
+use bevy_math::*;
+use bevy_reflect::{Reflect, TypeUuid};
+use bevy_render::{
+    color::Color,
+    draw::{Draw, Visible},
+    mesh::{Indices, Mesh},
+    pipeline::{PrimitiveTopology, RenderPipeline, RenderPipelines},
+    render_graph::base::MainPass,
+    texture::Texture,
+};
+use bevy_scene::Scene;
+use bevy_sprite::{ColorMaterial, Sprite, QUAD_HANDLE, SPRITE_PIPELINE_HANDLE};
+use bevy_transform::components::{GlobalTransform, Transform};
 
 use crate::parallax::Parallax;
 use crate::tmx::{Layer, Map, Object, Texture as TmxTexture, TexturePtr, Tile};

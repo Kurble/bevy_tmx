@@ -4,8 +4,8 @@ use std::path::Path;
 use std::pin::Pin;
 
 use anyhow::*;
-use bevy::math::{IVec2, UVec2, Vec4};
-use bevy::utils::AHasher;
+use bevy_math::{IVec2, UVec2, Vec4};
+use bevy_utils::AHasher;
 use xml::attribute::OwnedAttribute;
 use xml::reader::{EventReader, XmlEvent};
 
@@ -365,7 +365,7 @@ impl Tileset {
                                         height: tile_height,
                                         animation: Vec::new(),
                                         properties: HashMap::new(),
-                                        shapes: Vec::new(),
+                                        object_group: Vec::new(),
                                     }));
 
                                     tiles_added += 1;
@@ -416,7 +416,7 @@ impl Tile {
             self.bottom_right = new_data.bottom_right;
             self.image = new_data.image;
         }
-        self.shapes.append(&mut new_data.shapes);
+        self.object_group.append(&mut new_data.object_group);
     }
 
     async fn parse<R: Read + Send>(
@@ -440,7 +440,7 @@ impl Tile {
             height: 0,
             animation: Vec::new(),
             properties: HashMap::new(),
-            shapes: Vec::new(),
+            object_group: Vec::new(),
         };
 
         while match reader.next()? {
@@ -462,16 +462,9 @@ impl Tile {
                     }
                     "objectgroup" => {
                         let group = Layer::parse_objects(env.clone(), attributes, reader).await?;
-                        if let Layer::ObjectLayer { objects, .. } = group {
-                            for object in objects {
-                                if let Some(mut shape) = object.shape {
-                                    for point in shape.points.iter_mut() {
-                                        point.x += object.x;
-                                        point.y += object.y;
-                                    }
-                                    result.shapes.push(shape);
-                                }
-                            }
+                        if let Layer::ObjectLayer { objects, offset, .. } = group {
+                            assert_eq!(offset, IVec2::ZERO);
+                            result.object_group = objects;
                         }
                     }
                     _ => parse_empty(reader)?, // skip
