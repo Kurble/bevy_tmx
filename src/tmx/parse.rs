@@ -777,7 +777,10 @@ impl Object {
                 id: 0,
                 properties: HashMap::new(),
                 tile: None,
-                shape: Shape { points: Vec::new(), closed: false },
+                shape: Shape {
+                    points: Vec::new(),
+                    closed: false,
+                },
                 name: String::from(""),
                 ty: String::from(""),
                 x: 0.0,
@@ -881,10 +884,17 @@ impl Object {
                         "ellipse" => {
                             let offset = vec2(result.width * 0.5, result.height * 0.5);
                             result.shape = Shape {
-                                points: (0..16).into_iter().map(|i| {
-                                    let a = i as f32 * std::f32::consts::PI / 8.0;
-                                    offset + vec2(a.cos() * result.width * 0.5, a.sin() * result.height * 0.5)
-                                }).collect(),
+                                points: (0..16)
+                                    .into_iter()
+                                    .map(|i| {
+                                        let a = i as f32 * std::f32::consts::PI / 8.0;
+                                        offset
+                                            + vec2(
+                                                a.cos() * result.width * 0.5,
+                                                a.sin() * result.height * 0.5,
+                                            )
+                                    })
+                                    .collect(),
                                 closed: true,
                             };
                             parse_empty(reader)?;

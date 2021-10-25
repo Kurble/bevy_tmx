@@ -27,18 +27,18 @@
 #[cfg(feature = "plugin")]
 pub mod parallax;
 #[cfg(feature = "plugin")]
+mod plugin;
+#[cfg(feature = "plugin")]
 mod scene;
 /// Representation of the .tmx file format
 pub mod tmx;
-#[cfg(feature = "plugin")]
-mod plugin;
 
 #[cfg(not(feature = "plugin"))]
 mod loader {
     use super::tmx::Map;
     use anyhow::*;
+    use std::path::{Component, Path, PathBuf};
     use std::sync::Arc;
-    use std::path::{Path, PathBuf, Component};
 
     #[derive(Clone)]
     pub(crate) struct TmxLoadContext<'a> {
@@ -47,10 +47,13 @@ mod loader {
     }
 
     impl<'a> TmxLoadContext<'a> {
-        pub async fn load_file<'p>(&'p self, path: impl AsRef<Path> + Send + 'p) -> Result<Vec<u8>> {
+        pub async fn load_file<'p>(
+            &'p self,
+            path: impl AsRef<Path> + Send + 'p,
+        ) -> Result<Vec<u8>> {
             Ok(std::fs::read(self.file_path(path))?)
         }
-    
+
         pub fn file_path(&self, path: impl AsRef<Path>) -> PathBuf {
             let mut joined = PathBuf::new();
             for c in self.relative.join(path.as_ref()).components() {
@@ -66,7 +69,7 @@ mod loader {
             }
             joined
         }
-    
+
         pub fn file_directory(&self, path: impl AsRef<Path>) -> Self {
             Self {
                 relative: if let Some(parent) = path.as_ref().parent() {
@@ -78,7 +81,6 @@ mod loader {
             }
         }
     }
-    
 
     /// Load tmx::Map from a file.
     pub async fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Map> {
@@ -102,7 +104,7 @@ mod loader {
     }
 }
 
-#[cfg(feature = "plugin")]
-pub use plugin::*;
 #[cfg(not(feature = "plugin"))]
 pub use loader::*;
+#[cfg(feature = "plugin")]
+pub use plugin::*;

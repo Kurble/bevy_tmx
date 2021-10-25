@@ -20,10 +20,16 @@ pub struct Texture {
 }
 
 enum Inner {
-    Defined { path: PathBuf },
-    Decoded { buffer: RgbaImage },
-    #[cfg(feature="plugin")]
-    Loaded { handle: Handle<BevyTexture> },
+    Defined {
+        path: PathBuf,
+    },
+    Decoded {
+        buffer: RgbaImage,
+    },
+    #[cfg(feature = "plugin")]
+    Loaded {
+        handle: Handle<BevyTexture>,
+    },
 }
 
 pub(crate) struct TexturePtr(Arc<str>);

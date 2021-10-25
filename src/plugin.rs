@@ -2,14 +2,19 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::*;
-use bevy_app::{Plugin, AppBuilder};
-use bevy_asset::{AssetLoader, AddAsset, BoxedFuture, LoadContext, LoadedAsset};
-use bevy_ecs::{world::{EntityMut, World}, system::IntoSystem};
+use bevy_app::{AppBuilder, Plugin};
+use bevy_asset::{AddAsset, AssetLoader, BoxedFuture, LoadContext, LoadedAsset};
+use bevy_ecs::{
+    system::IntoSystem,
+    world::{EntityMut, World},
+};
 use bevy_math::*;
 
-use crate::tmx::{Map, Object};
 use crate::parallax::{parallax_transform_system, Parallax};
-use crate::scene::{proto_sprite_upgrade_system, ProtoSprite, SceneBuilder, ObjectVisitor, ImageVisitor, MapVisitor};
+use crate::scene::{
+    proto_sprite_upgrade_system, ImageVisitor, MapVisitor, ObjectVisitor, ProtoSprite, SceneBuilder,
+};
+use crate::tmx::{Map, Object};
 
 /// Plugin that adds support for .tmx asset loading. Loading behaviour can be customized on creation.
 pub struct TmxPlugin {

@@ -6,10 +6,10 @@ use anyhow::*;
 use bevy_asset::{Handle, LoadContext, LoadedAsset};
 use bevy_ecs::{
     bundle::Bundle,
+    entity::Entity,
     reflect::ReflectComponent,
     system::{Commands, Query},
     world::{EntityMut, World},
-    entity::Entity,
 };
 use bevy_math::*;
 use bevy_reflect::{Reflect, TypeUuid};
