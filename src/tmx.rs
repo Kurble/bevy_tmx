@@ -8,6 +8,7 @@ pub use layer::Layer;
 pub use map::Map;
 pub use property::Property;
 pub use texture::Texture;
+#[cfg(feature = "plugin")]
 pub(crate) use texture::TexturePtr;
 pub use tile_type::TileType;
 
@@ -79,8 +80,8 @@ pub struct Object {
     pub properties: HashMap<String, Property>,
     /// Global tile id defining an optional sprite for this object.
     pub tile: Option<u32>,
-    /// An optional custom shape for this object.
-    pub shape: Option<Shape>,
+    /// The shape of this object.
+    pub shape: Shape,
     /// Custom name for the object
     pub name: String,
     /// Custom type for the object

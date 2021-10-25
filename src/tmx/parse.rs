@@ -4,7 +4,7 @@ use std::path::Path;
 use std::pin::Pin;
 
 use anyhow::*;
-use bevy_math::{IVec2, UVec2, Vec4};
+use bevy_math::{vec2, IVec2, UVec2, Vec4};
 use bevy_utils::AHasher;
 use xml::attribute::OwnedAttribute;
 use xml::reader::{EventReader, XmlEvent};
@@ -462,9 +462,14 @@ impl Tile {
                     }
                     "objectgroup" => {
                         let group = Layer::parse_objects(env.clone(), attributes, reader).await?;
-                        if let Layer::ObjectLayer { objects, offset, .. } = group {
+                        if let Layer::ObjectLayer {
+                            mut objects,
+                            offset,
+                            ..
+                        } = group
+                        {
                             assert_eq!(offset, IVec2::ZERO);
-                            result.object_group = objects;
+                            result.object_group.append(&mut objects);
                         }
                     }
                     _ => parse_empty(reader)?, // skip
@@ -772,7 +777,7 @@ impl Object {
                 id: 0,
                 properties: HashMap::new(),
                 tile: None,
-                shape: None,
+                shape: Shape { points: Vec::new(), closed: false },
                 name: String::from(""),
                 ty: String::from(""),
                 x: 0.0,
@@ -825,6 +830,16 @@ impl Object {
                 }
             }
 
+            result.shape = Shape {
+                points: vec![
+                    vec2(0.0, 0.0),
+                    vec2(result.width, 0.0),
+                    vec2(result.width, result.height),
+                    vec2(0.0, result.height),
+                ],
+                closed: true,
+            };
+
             while match reader.next()? {
                 XmlEvent::StartElement {
                     name, attributes, ..
@@ -857,10 +872,28 @@ impl Object {
                                     Err(e) => Err(e),
                                 });
 
-                            result.shape = Some(Shape {
+                            result.shape = Shape {
                                 points: points?,
                                 closed: name.local_name == "polygon",
-                            });
+                            };
+                            parse_empty(reader)?;
+                        }
+                        "ellipse" => {
+                            let offset = vec2(result.width * 0.5, result.height * 0.5);
+                            result.shape = Shape {
+                                points: (0..16).into_iter().map(|i| {
+                                    let a = i as f32 * std::f32::consts::PI / 8.0;
+                                    offset + vec2(a.cos() * result.width * 0.5, a.sin() * result.height * 0.5)
+                                }).collect(),
+                                closed: true,
+                            };
+                            parse_empty(reader)?;
+                        }
+                        "point" => {
+                            result.shape = Shape {
+                                points: vec![vec2(0.0, 0.0)],
+                                closed: false,
+                            };
                             parse_empty(reader)?;
                         }
                         _ => parse_empty(reader)?, // skip

@@ -4,7 +4,9 @@ use std::sync::Arc;
 
 use anyhow::*;
 use async_mutex::Mutex;
+#[cfg(feature = "plugin")]
 use bevy_asset::{Handle, LoadContext, LoadedAsset};
+#[cfg(feature = "plugin")]
 use bevy_render::texture::{Extent3d, Texture as BevyTexture, TextureDimension, TextureFormat};
 use image::{load_from_memory, GenericImage, RgbaImage};
 
